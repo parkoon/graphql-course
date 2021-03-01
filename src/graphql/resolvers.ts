@@ -1,14 +1,79 @@
+import { UserInputError, AuthenticationError } from "apollo-server";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 import { User } from "../entity/User";
-import { UserInputError } from "apollo-server";
+import { Not } from "typeorm";
 
 export default {
   Query: {
-    getUsers: async () => {
+    getUsers: async (_, __, context) => {
       try {
-        const users = await User.find();
+        let user: any;
+        if (context.req && context.req.headers.authorization) {
+          const token = context.req.headers.authorization.split("Bearer ")[1];
+
+          const decodedToken = jwt.verify(token, "JWT_SECRET");
+
+          if (!decodedToken) {
+            throw new AuthenticationError("unauthenticated");
+          }
+
+          user = decodedToken;
+        }
+
+        const users = await User.find({
+          where: {
+            username: Not(user.username),
+          },
+        });
         return users;
       } catch (err) {
+        throw err;
+      }
+    },
+
+    login: async (_, args) => {
+      const { username, password } = args;
+      let errors: any = {};
+
+      try {
+        if (username.trim() === "") errors.email = "empty email";
+        if (password.trim() === "") errors.password = "empty password";
+
+        if (Object.keys(errors).length > 0) {
+          throw new UserInputError("bad input", { errors });
+        }
+
+        const user = await User.findOne({ where: { username } });
+
+        if (!user) {
+          errors.username = "user not found";
+          throw new UserInputError("user not found", { errors });
+        }
+
+        if (Object.keys(errors).length > 0) {
+          throw new UserInputError("user not found", { errors });
+        }
+
+        const correctPassword = await bcrypt.compare(password, user.password);
+
+        if (!correctPassword) {
+          errors.password = "password is incorrect";
+          throw new AuthenticationError("password is incorrect");
+        }
+
+        const token = jwt.sign({ username }, "JWT_SECRET", {
+          expiresIn: 60 * 60,
+        });
+
+        return {
+          ...user,
+          token,
+          createdAt: user.createdAt.toISOString(),
+        };
+      } catch (err) {
         console.log(err);
+        throw err;
       }
     },
   },
@@ -21,7 +86,7 @@ export default {
 
       try {
         if (email.trim() === "") errors.email = "empty email";
-        if (username.trim() === "") errors.username = "empty usename";
+        if (username.trim() === "") errors.username = "empty username";
         if (password.trim() === "") errors.password = "empty password";
 
         const userByEmail = await User.findOne({ email });

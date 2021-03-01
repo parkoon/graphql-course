@@ -9,6 +9,7 @@ import resolvers from "./graphql/resolvers";
 const server = new ApolloServer({
   typeDefs,
   resolvers,
+  context: (ctx) => ctx, // now, you can access context in resolver
 });
 
 server.listen().then(({ url }) => {
