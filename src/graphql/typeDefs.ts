@@ -6,12 +6,7 @@ export default gql`
   }
 
   type Mutation {
-    register(
-      username: String!
-      email: String!
-      password: String!
-      confirmPassword: String!
-    ): User!
+    register(username: String!, email: String!, password: String!): User!
   }
   type User {
     username: String!
